@@ -300,14 +300,20 @@ var DriverTemplate = `
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"os/exec"
-{{range .Imports}}
+    "bufio"
+    "fmt"
+    "os"
+    "os/exec"
+    "strconv"
+    "strings"{{range .Imports}}
 	{{ printf "%q" . }}
 {{end}}
 	"github.com/kr/pty"
+)
+
+const (
+    RED   = "\033[31m"
+    RESET = "\033[0m"
 )
 
 func main() {
@@ -339,13 +345,30 @@ func expect(expected string, buf *bufio.Reader) {
 		got, _, _ := buf.ReadRune()
 		sofar = append(sofar, got)
 		if got != r {
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintf(os.Stderr, "Expected: %q\n", expected[:len(sofar)])
-			fmt.Fprintf(os.Stderr, "Got:      %q\n", string(sofar))
-			panic(fmt.Errorf("Unexpected Rune %q, Expected %q\n", got, r))
-		} else {
-			fmt.Printf("%c", r)
-		}
+            fmt.Fprintln(os.Stderr, RESET)
+
+            // we want to quote the string but we also want to make the unexpected character RED
+            // so we use the strconv.Quote function but trim off the quoted characters so we can 
+            // merge multiple quoted strings into one.
+            expStart := strings.TrimSuffix(strconv.Quote(expected[:len(sofar)-1]), "\"")
+            expMiss := strings.TrimSuffix(strings.TrimPrefix(strconv.Quote(string(expected[len(sofar)-1])), "\""), "\"")
+            expEnd := strings.TrimPrefix(strconv.Quote(expected[len(sofar):]), "\"")
+
+            fmt.Fprintf(os.Stderr, "Expected: %s%s%s%s%s\n", expStart, RED, expMiss, RESET, expEnd)
+
+            // read the rest of the buffer
+            p := make([]byte, buf.Buffered())
+            buf.Read(p)
+
+            gotStart := strings.TrimSuffix(strconv.Quote(string(sofar[:len(sofar)-1])), "\"")
+            gotMiss := strings.TrimSuffix(strings.TrimPrefix(strconv.Quote(string(sofar[len(sofar)-1])), "\""), "\"")
+            gotEnd := strings.TrimPrefix(strconv.Quote(string(p)), "\"")
+
+            fmt.Fprintf(os.Stderr, "Got:      %s%s%s%s%s\n", gotStart, RED, gotMiss, RESET, gotEnd)
+            panic(fmt.Errorf("Unexpected Rune %q, Expected %q\n", got, r))
+        } else {
+            fmt.Printf("%c", r)
+        }
 	}
 }
 `
