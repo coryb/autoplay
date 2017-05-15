@@ -260,6 +260,7 @@ func main() {
 	}
 	fmt.Fprint(out, results)
 	out.Close()
+	exec.Command("gofmt", "-s", "-w", opts.Name).Run()
 }
 
 func runTemplate(tmpl string, data interface{}) (string, error) {
